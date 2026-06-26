@@ -1,65 +1,133 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { client } from '@/lib/sanity/client'
+import { SELECTED_WORKS_QUERY } from '@/lib/sanity/queries'
+import { LoadingScreen } from '@/components/layout/LoadingScreen'
+import { CursorArrow } from '@/components/layout/CursorArrow'
+
+let appHasLoaded = false
 
 export default function Home() {
+  const [works, setWorks] = useState<any[]>([])
+  const [loaded, setLoaded] = useState(appHasLoaded)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const isScrolling = useRef(false)
+
+  useEffect(() => {
+    client.fetch(SELECTED_WORKS_QUERY).then((data) => {
+      setWorks(data)
+      appHasLoaded = true
+      setLoaded(true)
+    })
+  }, [])
+
+  const total = works.length
+  // Extended array: [clone-of-last, ...real, clone-of-first]
+  const loop = total > 0 ? [works[total - 1], ...works, works[0]] : works
+  const loopTotal = loop.length
+
+  // Start at index 1 (skip the prepended clone)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && total > 0) el.scrollLeft = el.clientWidth
+  }, [total])
+
+  const navigate = useCallback((direction: 1 | -1) => {
+    const el = scrollRef.current
+    if (!el || isScrolling.current) return
+    isScrolling.current = true
+
+    el.scrollTo({ left: el.scrollLeft + direction * el.clientWidth, behavior: 'smooth' })
+
+    setTimeout(() => {
+      const idx = Math.round(el.scrollLeft / el.clientWidth)
+      if (idx <= 0) {
+        el.scrollLeft = (loopTotal - 2) * el.clientWidth
+      } else if (idx >= loopTotal - 1) {
+        el.scrollLeft = el.clientWidth
+      }
+      isScrolling.current = false
+    }, 700)
+  }, [loopTotal])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') navigate(1)
+      if (e.key === 'ArrowLeft') navigate(-1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navigate])
+
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX
+      if (Math.abs(delta) < 10) return
+      navigate(delta > 0 ? 1 : -1)
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
+    return () => window.removeEventListener('wheel', onWheel)
+  }, [navigate])
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <>
+      <LoadingScreen isLoaded={loaded} />
+
+      {loaded && total > 0 && (
+        <main className="w-full bg-white h-screen flex flex-col -mt-17">
+          <CursorArrow containerRef={scrollRef} />
+          <div
+            ref={scrollRef}
+            style={{
+              flex: 1,
+              display: 'flex',
+              overflowX: 'scroll',
+              overflowY: 'hidden',
+              scrollSnapType: 'x mandatory',
+              scrollbarWidth: 'none',
+              cursor: 'none',
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+            {loop.map((work, i) => (
+              <div
+                key={i}
+                style={{
+                  width: '100vw',
+                  height: '100%',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  scrollSnapAlign: 'start',
+                  padding: '2rem',
+                  position: 'relative',
+                }}
+              >
+                {work.type === 'video' && work.videoUrl ? (
+                  <video
+                    src={work.videoUrl}
+                    autoPlay muted loop playsInline
+                    style={{ maxHeight: '60vh', maxWidth: '100%', width: 'auto', height: 'auto', display: 'block' }}
+                  />
+                ) : (
+                  work.imageUrl && (
+                    <img
+                      src={work.imageUrl}
+                      alt=""
+                      style={{ maxHeight: '60vh', maxWidth: '100%', width: 'auto', height: 'auto', display: 'block' }}
+                      loading="eager"
+                    />
+                  )
+                )}
+                <div onClick={() => navigate(-1)} style={{ position: 'absolute', left: 0, top: 0, width: '50%', height: '100%' }} />
+                <div onClick={() => navigate(1)} style={{ position: 'absolute', right: 0, top: 0, width: '50%', height: '100%' }} />
+              </div>
+            ))}
+          </div>
+        </main>
+      )}
+    </>
+  )
 }
