@@ -15,11 +15,13 @@ export default function Home() {
   const isScrolling = useRef(false)
 
   useEffect(() => {
-    client.fetch(SELECTED_WORKS_QUERY).then((data) => {
-      setWorks(data)
-      appHasLoaded = true
-      setLoaded(true)
-    })
+    client.fetch(SELECTED_WORKS_QUERY)
+      .then((data) => {
+        setWorks(data)
+        appHasLoaded = true
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true))
   }, [])
 
   const total = works.length
